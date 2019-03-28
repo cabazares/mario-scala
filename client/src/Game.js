@@ -106,8 +106,8 @@ class Game {
     window.requestAnimationFrame(() => this.gameLoop());
 
     this.drawBG();
-    this.blocks.map(b => b.draw());
-    this.players.map(p => {
+    this.blocks.forEach(b => b.draw());
+    this.players.forEach(p => {
       p.update();
       p.draw();
     })
