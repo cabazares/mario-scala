@@ -27,13 +27,22 @@ case class PlayerInput(left: Boolean, right: Boolean, up: Boolean, down: Boolean
 }
 
 case class Player(name: String, position: Position, direction: Direction, state: State, jumpEnergy: Double) {
-  def fragCheck(players: Iterable[Player]): Iterable[Player] = {
+  def collideCheck(players: Iterable[Player]): Iterable[Player] = {
     val width = World.GRID_WIDTH
     val height = World.GRID_HEIGHT
     players.filter(p => p != this).filter(b => {
       b.position.x < position.x + width && b.position.x + width > position.x &&
       b.position.y + height > position.y && b.position.y < position.y + height
     })
+  }
+
+  def resetFromCollision(collider: Position): Player = {
+    val offset = direction match {
+      case Left => Position((collider.x + World.GRID_WIDTH) - position.x, 0)
+      case Right => Position((position.x + World.GRID_WIDTH) - collider.x, 0)
+      case _ => Position(0, 0)
+    }
+    Player(name, position + offset, direction, state, jumpEnergy)
   }
 }
 object PlayerStats {
@@ -137,7 +146,7 @@ class GameAreaActor extends Actor {
       // update players
       for ((playerName, oldPlayerWithActor) <- players) {
         // based on inputs
-        playerInputs.get(playerName).map(playerInput => {
+        playerInputs.get(playerName).map(f = playerInput => {
           val oldPlayer = oldPlayerWithActor.player
           val actor = oldPlayerWithActor.actor
 
@@ -172,18 +181,19 @@ class GameAreaActor extends Actor {
           val jumpEnergy = if (oldPlayer.state != Jump && playerState == Jump && hasBlockBelow(player).isDefined) PlayerStats.JUMP_STRENGTH else oldPlayer.jumpEnergy
           player = Player(playerName, oldPlayer.position + offset, playerDirection, playerState, jumpEnergy)
 
-          // handle collisions
-          World.checkPlayerCollision(world, player).map(collision => {
-            val offset = playerInput match {
-              case PlayerInput(true, _, _, _) => Position((collision.position.x + World.GRID_WIDTH) - oldPlayer.position.x, 0)
-              case PlayerInput(_, true, _, _) => Position((oldPlayer.position.x + World.GRID_WIDTH) - collision.position.x, 0)
-              case _ => Position(0, 0)
-            }
 
-            // FIX SIDE EFFECT
-            // update player position
-            player = Player(playerName, oldPlayer.position + offset, player.direction, player.state, jumpEnergy)
-          })
+          // handle collisions
+          World
+            .checkPlayerCollision(world, player)
+            .map(collision => oldPlayer.resetFromCollision(collision.position))
+            .map(p => player = p)
+
+          // don't share same space with other players
+          val otherPlayers = players.values.filter(p => p.player.name != player.name).map(p => p.player)
+          player
+            .collideCheck(otherPlayers)
+            .map(collision => oldPlayer.resetFromCollision(collision.position))
+            .map(p => player = p)
 
           // should have changed and no collisions
           if (player != oldPlayer) {
@@ -225,7 +235,7 @@ class GameAreaActor extends Actor {
           // check if frag
           if (goingDown) {
             val otherPlayers = players.values.filter(p => p.player.name != newPlayer.name).map(p => p.player)
-            newPlayer.fragCheck(otherPlayers).map(fragged => {
+            newPlayer.collideCheck(otherPlayers).map(fragged => {
               // reset player position if killed
               val resetPlayer = Player(fragged.name, World.getRandomPosition(), Right, Stand, 0)
               players(fragged.name) = PlayerWithActor(resetPlayer, players(fragged.name).actor)
