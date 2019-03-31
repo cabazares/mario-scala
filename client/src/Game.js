@@ -79,16 +79,21 @@ class Game {
       })
     })
 
-    document.onkeydown = (e) => {
+    document.onkeydown = document.onkeyup = (e) => {
       e = e || window.event;
+      let action;
       if (e.keyCode === 38) {
-         this.connection.send("up")
+         action = "up"
       } else if (e.keyCode === 40) {
-         this.connection.send("down")
+         action = "down"
       } else if (e.keyCode === 37) {
-         this.connection.send("left")
+         action = "left"
       } else if (e.keyCode === 39) {
-         this.connection.send("right")
+         action = "right"
+      }
+
+      if (action) {
+         this.connection.send(`${action}_${e.type}`)
       }
     }
 

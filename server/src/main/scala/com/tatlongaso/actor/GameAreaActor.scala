@@ -4,20 +4,38 @@ import akka.actor.{Actor, ActorRef}
 
 
 trait GameEvent
-case object Tick extends GameEvent
+// incoming events
+case class GameUpdate(playerInputs: Map[String, PlayerInput]) extends GameEvent
 case class PlayerJoined(player: Player, actor: ActorRef) extends GameEvent
 case class PlayerLeft(name: String) extends GameEvent
-case class PlayerMoveRequest(name: String, direction: String) extends GameEvent
-case class PlayersChanged(players: Iterable[Player]) extends GameEvent
+case class PlayerSentInput() extends GameEvent
 
+// outgoing
+case class PlayersChanged(players: Iterable[Player]) extends GameEvent
 case class WorldChanged(world: World) extends GameEvent
+
+// represents current input for player
+case class PlayerInput(left: Boolean, right: Boolean, up: Boolean, down: Boolean) {
+  def this() {
+    this(false, false, false, false)
+  }
+
+  def update(key: String, pressed: Boolean): PlayerInput = key match {
+    case "up" => PlayerInput(this.left, this.right, pressed, this.down)
+    case "down" => PlayerInput(this.left, this.right, this.up, pressed)
+    case "left" => PlayerInput(pressed, this.right, this.up, this.down)
+    case "right" => PlayerInput(this.left, pressed, this.up, this.down)
+    case _ => this
+  }
+}
 
 case class Player(name: String, position: Position, direction: Direction, state: State, jumpEnergy: Double)
 object PlayerStats {
-  val JUMP_STRENGTH = 12
+  val JUMP_STRENGTH = 36
+  val MOVE_SPEED = 2.5f
 }
 case class PlayerWithActor(player: Player, actor: ActorRef)
-case class Position(x: Int, y: Int) {
+case class Position(x: Float, y: Float) {
   def + (other: Position): Position = {
     Position(x + other.x, y + other.y)
   }
@@ -83,7 +101,7 @@ case object World {
 
 
 class GameAreaActor extends Actor {
-  val GRAVITY = 8
+  val GRAVITY = 3
 
   val players = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
   val world = new World()
@@ -98,60 +116,66 @@ class GameAreaActor extends Actor {
       players -= playerName
       notifyPlayersChanged()
     }
-    case PlayerMoveRequest(playerName, direction) => {
-      val oldPlayerWithActor = players(playerName)
-      val oldPlayer = oldPlayerWithActor.player
-      val actor = oldPlayerWithActor.actor
+    case GameUpdate(playerInputs) => {
+      // update players
+      for ((playerName, oldPlayerWithActor) <- players) {
+        // based on inputs
+        playerInputs.get(playerName).map(playerInput => {
+          val oldPlayer = oldPlayerWithActor.player
+          val actor = oldPlayerWithActor.actor
 
-      val playerDirection = direction match {
-        case "left" => Left
-        case "right" => Right
-        case _ => oldPlayer.direction
-      }
-
-      val offset = direction match {
-        case "left" => Position(-5, 0)
-        case "right" => Position(5, 0)
-        case _ => Position(0, 0)
-      }
-
-      val playerState =
-        if (oldPlayer.state == Jump)
-          Jump
-        else
-          direction match {
-            case "up" => Jump
-            case "down" => Stand
-            case "left" => Run
-            case "right" => Run
+          // set direction
+          val playerDirection = playerInput match {
+            case PlayerInput(true, _, _, _) => Left
+            case PlayerInput(_, true, _, _) => Right
+            case _ => oldPlayer.direction
           }
 
-      // check if can jump
-      var player = Player(playerName, oldPlayer.position + offset, playerDirection, playerState, oldPlayer.jumpEnergy)
-      val jumpEnergy = if (oldPlayer.state != Jump && playerState == Jump && hasBlockBelow(player).isDefined) PlayerStats.JUMP_STRENGTH else oldPlayer.jumpEnergy
-      player = Player(playerName, oldPlayer.position + offset, playerDirection, playerState, jumpEnergy)
+          // set move speed
+          val offset = playerInput match {
+            case PlayerInput(true, _, _, _) => Position(-PlayerStats.MOVE_SPEED, 0)
+            case PlayerInput(_, true, _, _) => Position(PlayerStats.MOVE_SPEED, 0)
+            case _ => Position(0, 0)
+          }
 
-      // handle collisions
-      World.checkPlayerCollision(world, player).map(collision => {
-        val offset = direction match {
-          case "left" => Position((collision.position.x + World.GRID_WIDTH) - oldPlayer.position.x, 0)
-          case "right" => Position((oldPlayer.position.x + World.GRID_WIDTH) - collision.position.x, 0)
-          case _ => Position(0, 0)
-        }
+          // set state based on movement
+          val playerState =
+            if (oldPlayer.state == Jump)
+              Jump
+            else
+              playerInput match {
+                case PlayerInput(_, _, true, _) => Jump
+                case PlayerInput(true, _, _, _) => Run
+                case PlayerInput(_, true, _, _) => Run
+                case _ => Stand
+              }
 
-        // FIX SIDE EFFECT
-        // update player position
-        player = Player(playerName, oldPlayer.position + offset, player.direction, player.state, jumpEnergy)
-      })
+          // check if can jump
+          var player = Player(playerName, oldPlayer.position + offset, playerDirection, playerState, oldPlayer.jumpEnergy)
+          val jumpEnergy = if (oldPlayer.state != Jump && playerState == Jump && hasBlockBelow(player).isDefined) PlayerStats.JUMP_STRENGTH else oldPlayer.jumpEnergy
+          player = Player(playerName, oldPlayer.position + offset, playerDirection, playerState, jumpEnergy)
 
-      // should have changed and no collisions
-      if (player != oldPlayer) {
-        players(player.name) = PlayerWithActor(player, actor)
-        //notifyPlayerChanged(players(player.name))
-        notifyPlayersChanged()
+          // handle collisions
+          World.checkPlayerCollision(world, player).map(collision => {
+            val offset = playerInput match {
+              case PlayerInput(true, _, _, _) => Position((collision.position.x + World.GRID_WIDTH) - oldPlayer.position.x, 0)
+              case PlayerInput(_, true, _, _) => Position((oldPlayer.position.x + World.GRID_WIDTH) - collision.position.x, 0)
+              case _ => Position(0, 0)
+            }
+
+            // FIX SIDE EFFECT
+            // update player position
+            player = Player(playerName, oldPlayer.position + offset, player.direction, player.state, jumpEnergy)
+          })
+
+          // should have changed and no collisions
+          if (player != oldPlayer) {
+            players(player.name) = PlayerWithActor(player, actor)
+          }
+        })
       }
-    }
-    case Tick => {
+
+
       // update world
       players.values.foreach(p => p.player.state match {
         // calculate jumping
@@ -165,9 +189,8 @@ class GameAreaActor extends Actor {
           val offset = Position(0, jumpMove.toInt)
           newPlayer = Player(player.name, player.position + offset, player.direction, player.state, jumpEnergy - 1)
 
-          var collisions = World.checkPlayerCollision(world, newPlayer)
-
           // check if collide while jumping up
+          val collisions = World.checkPlayerCollision(world, newPlayer)
           if (collisions.size > 0 && jumpEnergy > 0) {
             val side = collisions.head.position.y - World.GRID_HEIGHT - 1
             // switch to stand
@@ -192,17 +215,16 @@ class GameAreaActor extends Actor {
           val player = p.player
           val bottom = if (player.position.y - GRAVITY > 0) -GRAVITY else 0
           var newPlayer = Player(player.name, player.position + Position(0, bottom), player.direction, player.state, player.jumpEnergy)
+
           World.checkPlayerCollision(world, newPlayer).map(collision => {
             val top = collision.position.y + World.GRID_HEIGHT
             // FIX SIDE EFFECT
             // update player position
-            newPlayer = Player(player.name, Position(player.position.x, top), player.direction, Stand, player.jumpEnergy)
+            newPlayer = Player(player.name, Position(player.position.x, top), player.direction, player.state, player.jumpEnergy)
           })
-          // should have changed
-          if (p.player != newPlayer) {
-            players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
-            notifyPlayersChanged()
-          }
+
+          players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
+          notifyPlayersChanged()
         }
       })
     }
