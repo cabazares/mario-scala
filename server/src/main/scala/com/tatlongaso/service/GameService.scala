@@ -27,7 +27,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
       implicit builder => playerActor => {
         import GraphDSL.Implicits._
 
-        val player = Player(playerName, World.getRandomPosition(), Right, Stand, -10)
+        val player = Player(playerName, World.getRandomPosition(), Right, Stand)
         playerInputs += (playerName -> PlayerInput(false, false, false, false))
         val materialization = builder.materializedValue.map(playerActorRef => PlayerJoined(player, playerActorRef))
         val merge = builder.add(Merge[GameEvent](2))
