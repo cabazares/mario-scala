@@ -1,6 +1,6 @@
 import akka.http.scaladsl.testkit.{ScalatestRouteTest, WSProbe}
+import com.tatlongaso.actor.World
 import org.scalatest.{FunSuite, Matchers}
-
 import com.tatlongaso.service.GameService
 
 class MarioServerTest extends FunSuite with Matchers with ScalatestRouteTest {
@@ -17,9 +17,10 @@ class MarioServerTest extends FunSuite with Matchers with ScalatestRouteTest {
   }
 
   test ("should register player") {
+    val gameService = new GameService()
     assertWebsocket("Two") {
       wsClient =>
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Two\",\"position\":{\"x\":0,\"y\":0}}]")
+        wsClient.expectMessage(s"""{"type": "world", "data": ${gameService.worldToJson(new World())}}""")
     }
   }
 
@@ -27,36 +28,14 @@ class MarioServerTest extends FunSuite with Matchers with ScalatestRouteTest {
     val gameService = new GameService()
     val firstClient = WSProbe()
     val secondClient = WSProbe()
+    val initialWorld = s"""{"type": "world", "data": ${gameService.worldToJson(new World())}}"""
     WS(s"/?player=first", firstClient.flow) ~> gameService.websocketRoute ~> check {
-      firstClient.expectMessage("[{\"direction\":\"right\",\"name\":\"first\",\"position\":{\"x\":0,\"y\":0}}]")
+      firstClient.expectMessage(initialWorld)
+      //firstClient.expectMessage("""{"type": "players", "data": [{"direction":"right","jumpEnergy":0.0,"name":"first","position":{"x":64.0,"y":32.0},"state":"stand"}]}""")
     }
     WS(s"/?player=second", secondClient.flow) ~> gameService.websocketRoute ~> check {
-      firstClient.expectMessage("[{\"direction\":\"right\",\"name\":\"first\",\"position\":{\"x\":0,\"y\":0}},{\"direction\":\"right\",\"name\":\"second\",\"position\":{\"x\":0,\"y\":0}}]")
-    }
-  }
-
-  test("should register player and move it up") {
-    assertWebsocket("Player") {
-      wsClient =>
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Player\",\"position\":{\"x\":0,\"y\":0}}]")
-        wsClient.sendMessage("up")
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Player\",\"position\":{\"x\":0,\"y\":1}}]")
-    }
-  }
-
-
-  test("should register player and move around") {
-    assertWebsocket("Player") {
-      wsClient =>
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Player\",\"position\":{\"x\":0,\"y\":0}}]")
-        wsClient.sendMessage("up")
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Player\",\"position\":{\"x\":0,\"y\":1}}]")
-        wsClient.sendMessage("left")
-        wsClient.expectMessage("[{\"direction\":\"left\",\"name\":\"Player\",\"position\":{\"x\":-1,\"y\":1}}]")
-        wsClient.sendMessage("down")
-        wsClient.expectMessage("[{\"direction\":\"left\",\"name\":\"Player\",\"position\":{\"x\":-1,\"y\":0}}]")
-        wsClient.sendMessage("right")
-        wsClient.expectMessage("[{\"direction\":\"right\",\"name\":\"Player\",\"position\":{\"x\":0,\"y\":0}}]")
+      secondClient.expectMessage(initialWorld)
+      //secondClient.expectMessage("""{"type": "players", "data": [{"direction":"right","jumpEnergy":0.0,"name":"first","position":{"x":416.0,"y":32.0},"state":"stand"}]}""")
     }
   }
 
