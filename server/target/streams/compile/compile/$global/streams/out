@@ -1,4 +1,0 @@
-[0m[[0m[31merror[0m] [0m[0m/Users/keno/Projects/mario/server/src/main/scala/com/tatlongaso/actor/GameAreaActor.scala:86:19: unbound placeholder parameter[0m
-[0m[[0m[31merror[0m] [0m[0m        case _ => _[0m
-[0m[[0m[31merror[0m] [0m[0m                  ^[0m
-[0m[[0m[31merror[0m] [0m[0mone error found[0m
