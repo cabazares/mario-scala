@@ -1,4 +1,5 @@
 
+const WS_ADDRESS = process.env.REACT_APP_WS_ADDRESS
 
 class Connection {
   constructor() {
@@ -9,7 +10,7 @@ class Connection {
   }
 
   connect(playerName) {
-    this.ws = new WebSocket(`ws://localhost:8080/?player=${playerName}`);
+    this.ws = new WebSocket(`${WS_ADDRESS}/?player=${playerName}`);
 
     this.ws.onopen = (event) => {
        // handle event
