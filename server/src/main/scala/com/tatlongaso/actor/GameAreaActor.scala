@@ -1,13 +1,14 @@
 package com.tatlongaso.actor
 
-import scala.util.Random
+import scala.collection.mutable
 import akka.actor.{Actor, ActorRef}
+
 
 
 trait GameEvent
 // incoming events
 case class GameUpdate(playerInputs: Map[String, PlayerInput]) extends GameEvent
-case class PlayerJoined(player: Player, actor: ActorRef) extends GameEvent
+case class PlayerJoined(name:String, actor: ActorRef) extends GameEvent
 case class PlayerLeft(name: String) extends GameEvent
 case class PlayerSentInput() extends GameEvent
 
@@ -16,7 +17,7 @@ case class PlayersChanged(players: Iterable[Player]) extends GameEvent
 case class WorldChanged(world: World) extends GameEvent
 
 // represents current input for player
-case class PlayerInput(left: Boolean, right: Boolean, up: Boolean, down: Boolean) {
+case class PlayerInput(left: Boolean = false, right: Boolean = false, up: Boolean = false, down: Boolean = false) {
   def update(key: String, pressed: Boolean): PlayerInput = key match {
     case "up" => PlayerInput(this.left, this.right, pressed, this.down)
     case "down" => PlayerInput(this.left, this.right, this.up, pressed)
@@ -27,7 +28,6 @@ case class PlayerInput(left: Boolean, right: Boolean, up: Boolean, down: Boolean
 }
 
 case class Player(name: String, position: Position, direction: Direction, state: State, jumpEnergy: Double=0) {
-
   def clone(position: Position = this.position, direction: Direction = this.direction,
            state: State = this.state, jumpEnergy: Double = this.jumpEnergy): Player = {
     Player(name, position, direction, state, jumpEnergy)
@@ -61,6 +61,13 @@ case class Position(x: Double, y: Double) {
   def + (other: Position): Position = {
     Position(x + other.x, y + other.y)
   }
+
+  def / (other: Int): Position = {
+    Position(x / other, y / other)
+  }
+
+  def dist(other: Position): Double =
+    math.sqrt(math.pow(x - other.x, 2) + math.pow(y - other.y, 2))
 }
 
 sealed trait Direction
@@ -99,9 +106,10 @@ case object World {
     Position(WIDTH * GRID_WIDTH - GRID_WIDTH * 3, GRID_HEIGHT)
   )
 
-  def getRandomPosition(): Position = {
-    val rand = new Random()
-    startPositions(rand.nextInt(startPositions.length))
+  def startPosition(players: Iterable[Player]): Position = {
+    // find start position farthest away from other players
+    val midpoint = players.foldLeft(Position(0,0))((a: Position, b: Player) => a + b.position) / players.size
+    startPositions.maxBy(midpoint.dist)
   }
 
   def initialBlocks(): Iterable[Block] = {
@@ -135,23 +143,24 @@ case object World {
 class GameAreaActor extends Actor {
   val GRAVITY = 4
 
-  val players = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
+  val players: mutable.LinkedHashMap[String, PlayerWithActor] = mutable.LinkedHashMap[String, PlayerWithActor]()
   val world = new World()
 
-  var cachedPlayers = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
+  var cachedPlayers: mutable.LinkedHashMap[String, PlayerWithActor] = mutable.LinkedHashMap[String, PlayerWithActor]()
   var cachedWorld = new World()
 
   override def receive: Receive = {
-    case PlayerJoined(player, actor) => {
-      players += (player.name -> PlayerWithActor(player, actor))
+    case PlayerJoined(name, actor) =>
+      val player = Player(name, World.startPosition(players.values.map(_.player)), Right, Stand)
+      players += (name -> PlayerWithActor(player, actor))
       notifyWorldChanged()
       publishPlayersChanged()
-    }
-    case PlayerLeft(playerName) => {
+
+    case PlayerLeft(playerName) =>
       players -= playerName
       publishPlayersChanged()
-    }
-    case GameUpdate(playerInputs) => {
+
+    case GameUpdate(playerInputs) =>
       // update players based on inputs
       for ((playerName, oldPlayerWithActor) <- players) {
         val oldPlayer = oldPlayerWithActor.player
@@ -159,16 +168,14 @@ class GameAreaActor extends Actor {
         // stand if no other input
         playerInputs
           .get(playerName)
-          .filter(pi => pi == PlayerInput(false, false, false, false) && oldPlayer.state != Jump)
-          .map(_ => {
-            players(playerName) = PlayerWithActor(oldPlayer.clone(state=Stand), oldPlayerWithActor.actor)
-          })
+          .filter(pi => pi == PlayerInput() && oldPlayer.state != Jump)
+          .foreach(_ => players(playerName) = PlayerWithActor(oldPlayer.clone(state=Stand), oldPlayerWithActor.actor))
 
         // handle inputs
         playerInputs
           .get(playerName)
-          .filter(pi => pi != PlayerInput(false, false, false, false))
-          .map(playerInput => {
+          .filter(pi => pi != PlayerInput())
+          .foreach(playerInput => {
             val actor = oldPlayerWithActor.actor
 
             // set direction
@@ -200,96 +207,93 @@ class GameAreaActor extends Actor {
             // check if can jump
             var player = oldPlayer.clone(position = oldPlayer.position + offset, direction = playerDirection, state=playerState)
             val jumpEnergy = if (oldPlayer.state != Jump && playerState == Jump && hasBlockBelow(player).isDefined) PlayerStats.JUMP_STRENGTH else oldPlayer.jumpEnergy
-            player = player.clone(jumpEnergy=jumpEnergy)
+            player = player.clone(jumpEnergy = jumpEnergy)
 
-            // handle collisions
+            // reset players position based from blocks its colliding with
             World
               .checkPlayerCollision(world, player)
               .map(collision => oldPlayer.resetFromCollision(collision.position))
-              .map(p => player = p)
+              .foreach(player = _)
 
             // don't share same space with other players
             val otherPlayers = players.values.filter(p => p.player.name != player.name).map(p => p.player)
-
             player
               .collideCheck(otherPlayers)
               // ignore collision if hit on the head
               .filter(collision => {
                 val width = World.GRID_WIDTH
                 val height = World.GRID_HEIGHT
-                val playerMid = (player.position.y + height / 2)
-                (collision.position.x < player.position.x + width && collision.position.x + width > player.position.x &&
-                  collision.position.y + height > playerMid && collision.position.y < (playerMid + height / 2))
-              })
-              .map(collision => {
-                collision
+                val playerMid = player.position.y + height / 2
+                collision.position.x < player.position.x + width && collision.position.x + width > player.position.x &&
+                  collision.position.y + height > playerMid && collision.position.y < (playerMid + height / 2)
               })
               // reset position for player
               .map(collision => oldPlayer.resetFromCollision(collision.position))
-              .map(p => player = p)
+              .foreach(player = _)
 
             // should have changed and no collisions
             if (player != oldPlayer) {
               players(player.name) = PlayerWithActor(player, actor)
             }
           })
-      }
 
-      // update world
-      players.values.foreach(p => {
-        val player = p.player
-        val bottom = if (player.position.y - GRAVITY > 0) -GRAVITY else 0
-        var newPlayer = player.clone(position=player.position + Position(0, bottom))
-        val jumpEnergy = player.jumpEnergy
+        // update world
+        players.values.foreach(p => {
+          val player = p.player
+          val bottom = if (player.position.y - GRAVITY > 0) -GRAVITY else 0
+          var newPlayer = player.clone(position=player.position + Position(0, bottom))
+          val jumpEnergy = player.jumpEnergy
 
-        if (player.state == Jump) {
-          // check if going up or down
-          val goingDown = jumpEnergy <= 0
+          if (player.state == Jump) {
+            // check if going up or down
+            val goingDown = jumpEnergy <= 0
 
-          // add extra energy if button still pressed
-          //playerInputs.get(player.name).filter(pi => pi.up).map(_ => {
-          //  jumpEnergy += PlayerStats.JUMP_STRENGTH
-          //})
+            // add extra energy if button still pressed
+            //playerInputs.get(player.name).filter(pi => pi.up).map(_ => {
+            //  jumpEnergy += PlayerStats.JUMP_STRENGTH
+            //})
 
-          // calculate offset for jump
-          val jumpMove = if (goingDown) -GRAVITY * 2 else GRAVITY * 1.5
-          val offset = Position(0, jumpMove.toInt)
-          newPlayer = player.clone(position=player.position + offset,  jumpEnergy=jumpEnergy - 1)
+            // calculate offset for jump
+            val jumpMove = if (goingDown) -GRAVITY * 2 else GRAVITY * 1.5
+            val offset = Position(0, jumpMove.toInt)
+            newPlayer = player.clone(position=player.position + offset,  jumpEnergy=jumpEnergy - 1)
 
-          // check if collide while jumping up
-          val collisions = World.checkPlayerCollision(world, newPlayer)
-          if (collisions.size > 0 && !goingDown) {
-            val side = collisions.head.position.y - World.GRID_HEIGHT - 1
-            // switch to stand
-            newPlayer = player.clone(position=Position(player.position.x, side), state=Jump, jumpEnergy=0)
+            // check if collide while jumping up
+            val collisions = World.checkPlayerCollision(world, newPlayer)
+            if (collisions.nonEmpty && !goingDown) {
+              val side = collisions.head.position.y - World.GRID_HEIGHT - 1
+              // switch to stand
+              newPlayer = player.clone(position=Position(player.position.x, side), state=Jump, jumpEnergy=0)
+            }
+
+            // check if frag
+            if (goingDown) {
+              val otherPlayers = players.values.filter(p => p.player.name != newPlayer.name).map(p => p.player)
+              newPlayer.collideCheck(otherPlayers).map(fragged => {
+                // reset player position if killed
+                val startPosition = World.startPosition(players.values.map(_.player))
+                val resetPlayer = fragged.clone(position=startPosition, Right, Stand, jumpEnergy = 0)
+                players(fragged.name) = PlayerWithActor(resetPlayer, players(fragged.name).actor)
+                fragged
+              }).take(1).foreach(_ => {
+                // jump after fragging
+                newPlayer = newPlayer.clone(jumpEnergy=PlayerStats.JUMP_STRENGTH)
+              })
+            }
           }
 
-          // check if frag
-          if (goingDown) {
-            val otherPlayers = players.values.filter(p => p.player.name != newPlayer.name).map(p => p.player)
-            newPlayer.collideCheck(otherPlayers).map(fragged => {
-              // reset player position if killed
-              val resetPlayer = fragged.clone(position=World.getRandomPosition(), Right, Stand, 0)
-              players(fragged.name) = PlayerWithActor(resetPlayer, players(fragged.name).actor)
-            }).take(1).map(_ => {
-              // jump after fragging
-              newPlayer = newPlayer.clone(jumpEnergy=PlayerStats.JUMP_STRENGTH)
-            })
-          }
-        }
+          // check bottom collision
+          World.checkPlayerCollision(world, newPlayer).foreach(collision => {
+            val top = collision.position.y + World.GRID_HEIGHT
+            // update player position
+            val playerState = if (player.state == Jump) Stand else player.state
+            newPlayer = player.clone(position=Position(player.position.x, top), state=playerState)
+          })
 
-        // check bottom collision
-        World.checkPlayerCollision(world, newPlayer).map(collision => {
-          val top = collision.position.y + World.GRID_HEIGHT
-          // update player position
-          val playerState = if (player.state == Jump) Stand else player.state
-          newPlayer = player.clone(position=Position(player.position.x, top), state=playerState)
+          players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
+          notifyPlayersChanged()
         })
-
-        players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
-        notifyPlayersChanged()
-      })
-    }
+      }
   }
 
   def hasBlockBelow(player: Player): Option[Block] = {
