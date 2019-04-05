@@ -1,5 +1,0 @@
-[0m[[0m[33mwarn[0m] [0m[0m/Users/keno/Projects/mario/server/src/test/scala/MarioServerTest.scala:92:70: match may not be exhaustive.[0m
-[0m[[0m[33mwarn[0m] [0m[0mIt would fail on the following inputs: Streamed(_), Streamed(_), Strict(_)[0m
-[0m[[0m[33mwarn[0m] [0m[0m        val messagesToGameEventsFlow = builder.add(Flow[Message].map {[0m
-[0m[[0m[33mwarn[0m] [0m[0m                                                                     ^[0m
-[0m[[0m[33mwarn[0m] [0m[0mone warning found[0m
