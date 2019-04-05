@@ -138,15 +138,18 @@ class GameAreaActor extends Actor {
   val players = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
   val world = new World()
 
+  var cachedPlayers = collection.mutable.LinkedHashMap[String, PlayerWithActor]()
+  var cachedWorld = new World()
+
   override def receive: Receive = {
     case PlayerJoined(player, actor) => {
       players += (player.name -> PlayerWithActor(player, actor))
       notifyWorldChanged()
-      notifyPlayersChanged()
+      publishPlayersChanged()
     }
     case PlayerLeft(playerName) => {
       players -= playerName
-      notifyPlayersChanged()
+      publishPlayersChanged()
     }
     case GameUpdate(playerInputs) => {
       // update players based on inputs
@@ -294,13 +297,22 @@ class GameAreaActor extends Actor {
     World.checkPlayerCollision (world, newPlayer).headOption
   }
 
-  def notifyPlayerChanged(playerActor: PlayerWithActor): Unit = {
-    playerActor.actor ! PlayersChanged(Array(playerActor.player))
+  // notify players making sure we only publish changes
+  def notifyPlayersChanged(): Unit = {
+    // compute changed players
+    val changedPlayers = players.values.map(_.player).filter(p => cachedPlayers.get(p.name).exists(_.player != p))
+    cachedPlayers = players.clone()
+
+    if (changedPlayers.nonEmpty) {
+      publishPlayersChanged(changedPlayers)
+    }
   }
 
-  def notifyPlayersChanged(): Unit = {
-    players.values.foreach(_.actor ! PlayersChanged(players.values.map(_.player)))
+  // send message to actor about player data
+  def publishPlayersChanged(playersData: Iterable[Player]=players.values.map(_.player)): Unit = {
+    players.values.foreach(_.actor ! PlayersChanged(playersData))
   }
+
   def notifyWorldChanged(): Unit = {
     players.values.foreach(_.actor ! WorldChanged(world))
   }
