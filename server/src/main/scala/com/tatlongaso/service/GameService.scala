@@ -15,15 +15,14 @@ import scala.collection.mutable
 
 
 class GameService(implicit val actorSystem: ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
-  val websocketRoute: Route = (get & parameter("player"))  {
-    playerName =>
-      handleWebSocketMessages(flow(playerName))
-  }
-
   val playerInputs: mutable.Map[String, PlayerInput] = mutable.LinkedHashMap[String, PlayerInput]()
   val gameAreaActor: ActorRef = actorSystem.actorOf(Props(new GameAreaActor()))
   val playerActorSource: Source[GameEvent, ActorRef] = Source.actorRef[GameEvent](5, OverflowStrategy.fail)
   var gameTick: Option[Cancellable] = None
+
+  val websocketRoute: Route = (get & parameter("player"))  {
+    playerName => handleWebSocketMessages(flow(playerName))
+  }
 
   def flow(playerName: String): Flow[Message, Message, Any] =
     Flow.fromGraph(GraphDSL.create(playerActorSource){

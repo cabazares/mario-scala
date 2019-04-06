@@ -1,0 +1,25 @@
+.NameForm > form {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.NameForm > form input {
+  font-family: "EightBit";
+  font-size: 12pt;
+}
+
+.NameForm > form input[type=text] {
+  border: 1px solid black;
+  padding: 5px;
+}
+
+.NameForm > form input[type=submit] {
+  background-color: wheat;
+  padding: 5px 15px;
+  border-radius: 5px;
+  margin: 10px;
+}

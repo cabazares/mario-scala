@@ -21,8 +21,9 @@ class Game {
     this.resources = resources;
   }
 
-  init() {
-    // make sure resources are loaded
+  init(playerName) {
+    this.playerName = playerName;
+    // make sure resources are loaded before starting
     Promise.all(Object.values(this.resources).map(img => this.checkImage(img.src)))
                   .then(() => this.start());
   }
@@ -35,10 +36,9 @@ class Game {
 
   start() {
     // create player
-    const playerName = (new URLSearchParams(window.location.search)).get('p') || "default"
-    this.player = this.playerJoined(playerName);
+    this.player = this.playerJoined(this.playerName);
 
-    this.connection.connect(playerName)
+    this.connection.connect(this.playerName)
     this.connection.subscribe('players', (playerActions) => {
         const nameCompare = player => (e) => e.name === player.name
 
