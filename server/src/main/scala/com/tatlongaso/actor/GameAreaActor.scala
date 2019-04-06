@@ -249,65 +249,63 @@ class GameAreaActor extends Actor {
             players(player.name) = PlayerWithActor(player, actor)
           }
         })
+    }
 
-      // update players based on state
-      players.values.foreach(p => {
-        val player = p.player
-        var jumpEnergy = player.jumpEnergy
-        // apply gavity to player
-        val bottom = -GRAVITY * timeDelta
-        var newPlayer = player.clone(position = player.position + Position(0, bottom))
+    // update players based on state
+    players.values.foreach(p => {
+      val player = p.player
+      var jumpEnergy = player.jumpEnergy
+      // apply gavity to player
+      val bottom = -GRAVITY * timeDelta
+      var newPlayer = player.clone(position = player.position + Position(0, bottom))
+      val goingDown = jumpEnergy <= 0
 
-        if (player.state == Jump) {
-          // check if going up or down
-          val goingDown = jumpEnergy <= 0
-
-          // halt jump if up button no longer pressed
-          if (jumpEnergy <= PlayerStats.JUMP_STRENGTH / 2 && jumpEnergy > 0) {
-            playerInputs.get(player.name).filter(pi => !pi.up).map(_ => jumpEnergy = 0)
-          }
-
-          // calculate offset for jump
-          val jumpMove = (if (goingDown) -GRAVITY * 2 else GRAVITY * 1.5) * timeDelta
-          val offset = Position(0, jumpMove.toInt)
-          newPlayer = player.clone(position = player.position + offset, jumpEnergy = jumpEnergy - 1)
-
-          // check if collide while jumping up
-          val collisions = World.checkPlayerCollision(world, newPlayer)
-          if (collisions.nonEmpty && !goingDown) {
-            val side = collisions.head.position.y - World.GRID_HEIGHT - 1
-            // switch to stand
-            newPlayer = player.clone(position = Position(player.position.x, side), state = Jump, jumpEnergy = 0)
-          }
-
-          // check if frag
-          if (goingDown) {
-            val otherPlayers = players.values.filter(p => p.player.name != newPlayer.name).map(p => p.player)
-            newPlayer.collideCheck(otherPlayers).map(fragged => {
-              // reset player position if killed
-              val startPosition = World.startPosition(players.values.map(_.player))
-              val resetPlayer = fragged.clone(position = startPosition, Right, Stand, jumpEnergy = 0)
-              players(fragged.name) = PlayerWithActor(resetPlayer, players(fragged.name).actor)
-              fragged
-            }).take(1).foreach(_ => {
-              // jump after fragging
-              newPlayer = newPlayer.clone(jumpEnergy = PlayerStats.JUMP_STRENGTH)
-            })
-          }
+      if (player.state == Jump) {
+        // halt jump if up button no longer pressed
+        if (jumpEnergy <= PlayerStats.JUMP_STRENGTH * 0.6 && jumpEnergy > 0) {
+          playerInputs.get(player.name).filter(pi => !pi.up).map(_ => jumpEnergy = 0)
         }
 
-        // check bottom collision
-        World.checkPlayerCollision(world, newPlayer).foreach(collision => {
-          val top = collision.position.y + World.GRID_HEIGHT
-          // update player position
-          val playerState = if (player.state == Jump) Stand else player.state
-          newPlayer = player.clone(position = Position(player.position.x, top), state = playerState)
-        })
+        // calculate offset for jump
+        val jumpMove = (if (goingDown) -GRAVITY * 2 else GRAVITY * 1.5) * timeDelta
+        val offset = Position(0, jumpMove.toInt)
+        newPlayer = player.clone(position = player.position + offset, jumpEnergy = jumpEnergy - 1)
 
-        players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
-        notifyPlayersChanged()
+        // check if collide while jumping up
+        val collisions = World.checkPlayerCollision(world, newPlayer)
+        if (collisions.nonEmpty && !goingDown) {
+          val side = collisions.head.position.y - World.GRID_HEIGHT - 1
+          // switch to stand
+          newPlayer = player.clone(position = Position(player.position.x, side), state = Jump, jumpEnergy = 0)
+        }
+      }
+
+      // check if frag
+      if (goingDown) {
+        val otherPlayers = players.values.filter(p => p.player.name != newPlayer.name).map(p => p.player)
+        newPlayer.collideCheck(otherPlayers).map(fragged => {
+          // reset player position if killed
+          val startPosition = World.startPosition(players.values.map(_.player))
+          val resetPlayer = fragged.clone(position = startPosition, Right, Stand, jumpEnergy = 0)
+          players(fragged.name) = PlayerWithActor(resetPlayer, players(fragged.name).actor)
+          fragged
+        }).take(1).foreach(_ => {
+          // jump after fragging
+          newPlayer = newPlayer.clone(jumpEnergy = PlayerStats.JUMP_STRENGTH)
+        })
+      }
+
+      // check bottom collision
+      World.checkPlayerCollision(world, newPlayer).foreach(collision => {
+        val top = collision.position.y + World.GRID_HEIGHT
+        // update player position
+        val playerState = if (player.state == Jump) Stand else player.state
+        newPlayer = player.clone(position = Position(player.position.x, top), state = playerState)
       })
-    }
+
+      players(p.player.name) = PlayerWithActor(newPlayer, p.actor)
+      notifyPlayersChanged()
+    })
   }
 
   def hasBlockBelow(player: Player): Option[Block] = {
