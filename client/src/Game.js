@@ -1,6 +1,7 @@
 import Player from './Player';
 import Connection from './Connection'
 import Block from './Block'
+import Audio from './sound'
 
 
 class Game {
@@ -65,6 +66,12 @@ class Game {
           if (playerAction.direction) {
             player.direction = playerAction.direction
           }
+
+          // play jump sound if just jumped
+          if (player.state !== 'jump' && playerAction.state === 'jump') {
+            Audio.playSound('jump')
+          }
+
           // handle state
           if (playerAction.state) {
             player.state = playerAction.state
@@ -98,6 +105,7 @@ class Game {
     }
 
     this.gameLoop();
+    //AudioManager.playBG()
   }
 
   drawBG() {

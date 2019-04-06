@@ -1,5 +1,5 @@
 
-const WS_ADDRESS = process.env.REACT_APP_WS_ADDRESS
+const WS_ADDRESS = process.env.REACT_APP_WS_ADDRESS || 'ws://localhost:8080'
 
 class Connection {
   constructor() {
