@@ -174,15 +174,14 @@ class GameAreaActor extends Actor {
     for ((playerName, oldPlayerWithActor) <- players) {
       val oldPlayer = oldPlayerWithActor.player
 
+      val inputForPlayer = playerInputs.get(playerName)
       // stand if no other input
-      playerInputs
-        .get(playerName)
+      inputForPlayer
         .filter(pi => pi == PlayerInput() && oldPlayer.state != Jump)
         .foreach(_ => players(playerName) = PlayerWithActor(oldPlayer.clone(state = Stand), oldPlayerWithActor.actor))
 
       // handle inputs
-      playerInputs
-        .get(playerName)
+      inputForPlayer
         .filter(pi => pi != PlayerInput())
         .foreach(playerInput => {
           val actor = oldPlayerWithActor.actor
@@ -214,8 +213,13 @@ class GameAreaActor extends Actor {
               }
 
           // check if can jump
-          var player = oldPlayer.clone(position = oldPlayer.position + offset, direction = playerDirection, state = playerState)
-          val jumpEnergy = if (oldPlayer.state != Jump && playerState == Jump && hasBlockBelow(player).isDefined) PlayerStats.JUMP_STRENGTH else oldPlayer.jumpEnergy
+          var player = oldPlayer.clone(position = oldPlayer.position + offset,
+                                       direction = playerDirection,
+                                       state = playerState)
+          val jumpEnergy = if (oldPlayer.state != Jump &&playerState == Jump && hasBlockBelow(player).isDefined)
+            PlayerStats.JUMP_STRENGTH
+          else
+            oldPlayer.jumpEnergy
           player = player.clone(jumpEnergy = jumpEnergy)
 
           // reset players position based from blocks its colliding with
@@ -246,21 +250,22 @@ class GameAreaActor extends Actor {
           }
         })
 
-      // update world
+      // update players based on state
       players.values.foreach(p => {
         val player = p.player
-        val bottom = (if (player.position.y - GRAVITY > 0) -GRAVITY else 0) * timeDelta
+        var jumpEnergy = player.jumpEnergy
+        // apply gavity to player
+        val bottom = -GRAVITY * timeDelta
         var newPlayer = player.clone(position = player.position + Position(0, bottom))
-        val jumpEnergy = player.jumpEnergy
 
         if (player.state == Jump) {
           // check if going up or down
           val goingDown = jumpEnergy <= 0
 
-          // add extra energy if button still pressed
-          //playerInputs.get(player.name).filter(pi => pi.up).map(_ => {
-          //  jumpEnergy += PlayerStats.JUMP_STRENGTH
-          //})
+          // halt jump if up button no longer pressed
+          if (jumpEnergy <= PlayerStats.JUMP_STRENGTH / 2 && jumpEnergy > 0) {
+            playerInputs.get(player.name).filter(pi => !pi.up).map(_ => jumpEnergy = 0)
+          }
 
           // calculate offset for jump
           val jumpMove = (if (goingDown) -GRAVITY * 2 else GRAVITY * 1.5) * timeDelta
