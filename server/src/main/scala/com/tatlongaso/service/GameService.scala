@@ -20,7 +20,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
       handleWebSocketMessages(flow(playerName))
   }
 
-  val playerInputs: mutable.LinkedHashMap[String, PlayerInput] = mutable.LinkedHashMap[String, PlayerInput]()
+  val playerInputs: mutable.Map[String, PlayerInput] = mutable.LinkedHashMap[String, PlayerInput]()
   val gameAreaActor: ActorRef = actorSystem.actorOf(Props(new GameAreaActor()))
   val playerActorSource: Source[GameEvent, ActorRef] = Source.actorRef[GameEvent](5, OverflowStrategy.fail)
   var gameTick: Option[Cancellable] = None
@@ -138,8 +138,6 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
         })(actorSystem.dispatcher))
     }
   }
-  // FIXME: don't schedule updates if there are no players
-  startGame()
 
   def pauseGame(): Unit = {
     gameTick.filter(_.isCancelled).forall(_.cancel)

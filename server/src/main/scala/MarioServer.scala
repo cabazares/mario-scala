@@ -14,6 +14,8 @@ object MarioServer {
     val gameService = new GameService()
 
     Http().bindAndHandle(gameService.websocketRoute, "0.0.0.0", 8080)
+    // FIXME: probably shouldnt be here
+    gameService.startGame()
     println("Listening on ws://0.0.0.0:8080")
     // FIXME: shutdown properly
   }
