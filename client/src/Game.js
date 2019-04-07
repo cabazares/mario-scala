@@ -128,6 +128,9 @@ class Game {
     this.players.forEach(p => {
       p.update();
       p.draw();
+
+      if (false && p.name === this.playerName)
+        p.drawDot();
     })
 
     this.publishScore && this.publishScore(this.getScores())

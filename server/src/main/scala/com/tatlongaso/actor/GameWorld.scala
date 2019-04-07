@@ -76,7 +76,9 @@ case object World {
 
   val startPositions = Array(
     Position(GRID_WIDTH * 2, GRID_HEIGHT),
-    Position(WIDTH * GRID_WIDTH - GRID_WIDTH * 3, GRID_HEIGHT)
+    Position(WIDTH * GRID_WIDTH - GRID_WIDTH * 3, GRID_HEIGHT),
+    Position(GRID_WIDTH * 2, GRID_HEIGHT * 5),
+    Position(WIDTH * GRID_WIDTH - GRID_WIDTH * 3, GRID_HEIGHT * 5),
   )
 
   def startPosition(players: Iterable[Player]): Position = {
@@ -218,7 +220,7 @@ case object World {
           newPlayer = player.copy(position = Position(player.position.x, side), state = Jump, jumpEnergy = 0)
         }
 
-        // jump if killed someone
+        // score and jump if killed someone
         if (newPlayer.jumpEnergy <= 0 && newPlayer.collideCheck(otherPlayers).nonEmpty) {
           newPlayer = newPlayer.copy(jumpEnergy = PlayerStats.JUMP_STRENGTH, score = newPlayer.score + 1)
         }

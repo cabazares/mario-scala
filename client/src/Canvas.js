@@ -63,7 +63,7 @@ const Scores = (props) => {
        .sort((a, b) => scores[b] - scores[a])
        .map(k => {
         return (
-          <div>{k}: {scores[k]}</div>
+          <div key={k}>{k}: {scores[k]}</div>
         )
       })}
     </div>

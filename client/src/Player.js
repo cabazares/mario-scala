@@ -143,6 +143,16 @@ class Player {
                            this.position.x,
                            this.sheight - this.position.y - frameInfo.height);
   }
+
+  drawDot() {
+    const frameInfo = this.getFrameInfo();
+    this.context.beginPath();
+    this.context.arc(this.position.x + frameInfo.width / 2,
+                     this.sheight - this.position.y,
+                     2, 0, 2 * Math.PI);
+    this.context.fillStyle = 'white';
+    this.context.fill();
+  }
 }
 
 export default Player;
