@@ -41,12 +41,12 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
             // update inputs for player
             playerInputs.get(playerName).foreach(playerInput => {
               event match {
-                case "keydown" | "keyup" => playerInputs.update(playerName, playerInput.update(key, event == "keydown"))
+                case "keydown" | "keyup" =>
+                  playerInputs.update(playerName, playerInput.press(key, event == "keydown"))
                 case _ => playerInput
               }
             })
 
-            // blank game event since we have to return a game event
             PlayerSentInput()
           case _ => PlayerSentInput()
         })
@@ -71,7 +71,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
     })
 
   def worldToJson(world: World): String = {
-    implicit val positionFormat = jsonFormat2(Position)
+    implicit val positionFormat: RootJsonFormat[Position] = jsonFormat2(Position)
     implicit object blockTypeFormat extends JsonFormat[BlockType] {
       def write(blockType: BlockType): JsValue = blockType match {
         case Coin => JsString("Coin")
@@ -83,7 +83,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
         case _ => Brick
       }
     }
-    implicit val blockFormat = jsonFormat3(Block)
+    implicit val blockFormat: RootJsonFormat[Block] = jsonFormat3(Block)
     implicit object worldFormat extends JsonFormat[World] {
       def write(world: World): JsValue = JsArray(world.blocks.map(b => b.toJson.asJsObject).toVector)
       override def read(json: JsValue): World = json match{
@@ -95,7 +95,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
   }
 
   def playersToJson(players: Iterable[Player]): String = {
-    implicit val positionFormat = jsonFormat2(Position)
+    implicit val positionFormat: RootJsonFormat[Position] = jsonFormat2(Position)
     implicit object directionFormat extends JsonFormat[Direction] {
       def write(d: Direction): JsValue = d match {
         case Left => JsString("left")
@@ -122,13 +122,13 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
         case _ => deserializationError("invalid value")
       }
     }
-    implicit val playerFormat = jsonFormat5(Player)
+    implicit val playerFormat: RootJsonFormat[Player] = jsonFormat5(Player)
     players.toJson.toString
   }
 
   def startGame(): Unit = {
     // start if cancelled or not yet started
-    if (gameTick.filter(_.isCancelled).isEmpty ) {
+    if (gameTick.exists(_.isCancelled) || gameTick.isEmpty) {
       gameTick = Some(actorSystem.scheduler.schedule(
         initialDelay = 0 milliseconds,
         interval = 16 milliseconds,
