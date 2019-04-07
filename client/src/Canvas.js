@@ -12,6 +12,7 @@ class Canvas extends React.Component {
 
     this.state = {
       game: null,
+      scores: {},
     }
   }
 
@@ -23,6 +24,10 @@ class Canvas extends React.Component {
     game.setResources({
       mario: this.refs.mario,
       blocks: this.refs.blocks
+    })
+
+    game.onScoreUpdate((scores) => {
+      this.setState({ scores })
     })
 
     this.setState({ game })
@@ -38,13 +43,31 @@ class Canvas extends React.Component {
   }
 
   render() {
+    const { scores } = this.state
     return(
       <div>
         <canvas ref="canvas" width={width} height={height} />
         <img ref="mario" src="mario.png" alt="" style={{display: 'none'}} />
         <img ref="blocks" src="blocks.png" alt="" style={{display: 'none'}} />
+        <Scores scores={scores} />
       </div>
     )
   }
 }
+
+const Scores = (props) => {
+  const { scores } = props
+  return (
+    <div>
+      {Object.keys(scores)
+       .sort((a, b) => scores[b] - scores[a])
+       .map(k => {
+        return (
+          <div>{k}: {scores[k]}</div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default Canvas

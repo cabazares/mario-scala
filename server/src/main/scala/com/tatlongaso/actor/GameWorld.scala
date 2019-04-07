@@ -11,14 +11,9 @@ case class PlayerInput(left: Boolean = false, right: Boolean = false, up: Boolea
   }
 }
 
-case class Player(name: String, position: Position, direction: Direction, state: State, jumpEnergy: Double=0) {
+case class Player(name: String, position: Position, direction: Direction, state: State, jumpEnergy: Double=0, score: Int = 0) {
   def collideCheck(players: Iterable[Player]): Iterable[Player] = {
-    val width = World.GRID_WIDTH
-    val height = World.GRID_HEIGHT
-    players.filter(p => p != this).filter(b => {
-      b.position.x < position.x + width && b.position.x + width > position.x &&
-        b.position.y + height > position.y && b.position.y < position.y + height
-    })
+    players.filter(p => p != this).filter(_.position collides position)
   }
 
   def resetFromCollision(collider: Position): Player = {
@@ -225,7 +220,7 @@ case object World {
 
         // jump if killed someone
         if (newPlayer.jumpEnergy <= 0 && newPlayer.collideCheck(otherPlayers).nonEmpty) {
-          newPlayer = newPlayer.copy(jumpEnergy = PlayerStats.JUMP_STRENGTH)
+          newPlayer = newPlayer.copy(jumpEnergy = PlayerStats.JUMP_STRENGTH, score = newPlayer.score + 1)
         }
       }
 

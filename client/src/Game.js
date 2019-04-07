@@ -76,6 +76,11 @@ class Game {
           if (playerAction.state) {
             player.state = playerAction.state
           }
+
+          // handle score
+          if (playerAction.score) {
+            player.score = playerAction.score
+          }
         }
     })
 
@@ -124,6 +129,19 @@ class Game {
       p.update();
       p.draw();
     })
+
+    this.publishScore && this.publishScore(this.getScores())
+  }
+
+  getScores () {
+    return this.players.reduce((scores, player) => {
+      scores[player.name] = player.score
+      return scores
+    }, {})
+  }
+
+  onScoreUpdate (callback) {
+    this.publishScore = callback
   }
 
   // UTILS ----------------------------------

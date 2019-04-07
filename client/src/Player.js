@@ -67,6 +67,7 @@ class Player {
     }
     this.state = PlayerStates.RUN;
     this.direction = PlayerDirection.RIGHT;
+    this.score = 0;
 
     this.frameIndex = 0;
     this.tickCount = 0;

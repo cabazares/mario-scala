@@ -122,7 +122,7 @@ class GameService(implicit val actorSystem: ActorSystem, implicit val actorMater
         case _ => deserializationError("invalid value")
       }
     }
-    implicit val playerFormat: RootJsonFormat[Player] = jsonFormat5(Player)
+    implicit val playerFormat: RootJsonFormat[Player] = jsonFormat6(Player)
     players.toJson.toString
   }
 
