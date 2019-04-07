@@ -75,7 +75,7 @@ case class World(blocks: Iterable[Block] = World.initialBlocks())
 case object World {
   val GRAVITY = 0.3
   val HEIGHT = 16
-  val WIDTH = 16
+  val WIDTH = 24
   val GRID_WIDTH = 32
   val GRID_HEIGHT = 32
 
@@ -98,11 +98,21 @@ case object World {
       blocks += new Block(Position(GRID_WIDTH * i, 0), Brick)
     }
     // second level
-    for (i <- 4 to 10) {
+    for (i <- -1 to 4) {
       blocks += new Block(Position(GRID_WIDTH * i, GRID_HEIGHT * 4), Brick)
     }
-    for (i <- 18 to GRID_WIDTH) {
+    for (i <- 19 to World.WIDTH + 1) {
       blocks += new Block(Position(GRID_WIDTH * i, GRID_HEIGHT * 4), Brick)
+    }
+    for (i <- 8 to 15) {
+      blocks += new Block(Position(GRID_WIDTH * i, GRID_HEIGHT * 6), Brick)
+    }
+    // third level
+    for (i <- -1 to 4) {
+      blocks += new Block(Position(GRID_WIDTH * i, GRID_HEIGHT * 10), Brick)
+    }
+    for (i <- 20 to World.WIDTH + 1) {
+      blocks += new Block(Position(GRID_WIDTH * i, GRID_HEIGHT * 10), Brick)
     }
     blocks
   }

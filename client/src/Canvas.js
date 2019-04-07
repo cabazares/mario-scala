@@ -3,7 +3,7 @@ import React from 'react';
 import Game from './Game';
 
 
-const width = 512;
+const width = 768;
 const height = 480;
 
 class Canvas extends React.Component {
